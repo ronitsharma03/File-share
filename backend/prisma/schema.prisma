@@ -1,0 +1,43 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum StatusType {
+  pending
+  expired
+  completed
+}
+
+enum TransferType {
+  webrtc
+  s3
+}
+
+model FileData {
+  id String @id @default(uuid())
+  fileName String
+  fileSize BigInt
+  transferType TransferType
+  s3Key String?
+  downloadUrl String?
+  roomId String @unique
+  senderEmail String
+  receiverEmail String
+  status StatusType @default(pending)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  isDeleted Boolean @default(false)
+  @@index([expiresAt])
+}
+
