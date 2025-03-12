@@ -32,12 +32,14 @@ model FileData {
   s3Key String?
   downloadUrl String?
   roomId String @unique
-  senderEmail String
-  receiverEmail String
+  senderEmail String?
+  receiverEmail String?
   status StatusType @default(pending)
   createdAt DateTime @default(now())
   expiresAt DateTime
   isDeleted Boolean @default(false)
+
+  @@index([status])
   @@index([expiresAt])
 }
 
