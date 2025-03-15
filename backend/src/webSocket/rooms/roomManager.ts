@@ -6,7 +6,7 @@ interface client {
   id: string;
 }
 
-export class RoomManager {
+class RoomManager {
   private static instance: RoomManager;
   private rooms: Map<string, Map<string, client>>;
   private clientRooms: Map<WebSocket, { roomId: string; clientId: string }>;
@@ -93,3 +93,5 @@ export class RoomManager {
     return this.rooms.has(roomId);
   }
 }
+
+export default RoomManager.getInstance();
