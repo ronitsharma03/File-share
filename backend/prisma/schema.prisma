@@ -15,6 +15,7 @@ datasource db {
 
 enum StatusType {
   pending
+  active
   expired
   completed
 }
