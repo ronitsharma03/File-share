@@ -2,6 +2,8 @@ export type MessageType =
   | "room-join"
   | "room-joined"
   | "room-leave"
+  | "client-joined"
+  | "client-left"
   | "offer"
   | "answer"
   | "ice-candidate"
@@ -25,6 +27,21 @@ export interface RoomJoinMessage extends BaseMessage {
 export interface RoomJoinedMessage extends BaseMessage {
   type: "room-joined";
   clients: string[];
+}
+
+export interface RoomLeaveMessage extends BaseMessage {
+  type: "room-leave";
+  clientId: string;
+}
+
+export interface ClientJoinMessage extends BaseMessage {
+  type: "client-joined";
+  clientId: string;
+}
+
+export interface ClientLeaveMessage extends BaseMessage {
+  type: "client-left";
+  clientId: string;
 }
 
 export interface OfferMessage extends BaseMessage {
@@ -93,6 +110,9 @@ export interface FallbackInitiatedMessage extends BaseMessage {
 export type WebSocketMessage =
   | RoomJoinMessage
   | RoomJoinedMessage
+  | RoomLeaveMessage
+  | ClientLeaveMessage
+  | ClientJoinMessage
   | OfferMessage
   | AnswerMessage
   | IceCandidateMessage
