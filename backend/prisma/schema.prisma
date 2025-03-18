@@ -28,7 +28,7 @@ enum TransferType {
 model FileData {
   id String @id @default(uuid())
   fileName String
-  fileSize BigInt
+  fileSize Int
   transferType TransferType
   s3Key String?
   downloadUrl String?

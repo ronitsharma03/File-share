@@ -5,7 +5,7 @@ interface FileValidatorResult {
     error?: string;
 }
 
-export class FileValidator {
+class FileValidator {
     validateFileSize(fileSize: number): FileValidatorResult {
         const maxSizeAllowed = Number(config.file.maxSizeBytes);
         if(fileSize <= 0){

@@ -5,7 +5,7 @@ export interface CreateTransferParams{
     fileName: string;
     fileSize: number;
     transferType: 'webrtc' | 's3';
-    s3Key: string;
+    s3Key?: string;
     downloadUrl?: string;
     roomId: string;
     senderEmail?: string;
@@ -17,6 +17,7 @@ export class TransferRepository{
 
     // Create a new entry in the db for new transfer
     async createTransfer(params: CreateTransferParams): Promise<FileData>{
+        console.log("inside transfer repository");
         return prisma.fileData.create({
             data: {
                 fileName: params.fileName,
@@ -35,7 +36,7 @@ export class TransferRepository{
 
     // Getting a transfer by its ID
     async getTransferById(id: string): Promise<FileData | null>{
-        return prisma.fileData.findUnique({
+        return prisma.fileData.findFirst({
             where: {
                 id: id
             }
@@ -59,6 +60,18 @@ export class TransferRepository{
             },
             data: {
                 status: status
+            }
+        });
+    }
+
+    // Update s3 key
+    async updateTransferS3Key(transferId: string, key: string): Promise<FileData>{
+        return prisma.fileData.update({
+            where: {
+                id: transferId
+            },
+            data: {
+                s3Key: key
             }
         });
     }

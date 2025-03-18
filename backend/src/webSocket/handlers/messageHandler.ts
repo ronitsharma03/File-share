@@ -1,6 +1,8 @@
 import { WebSocketMessage } from "../protocol/messages";
 import { WebSocket, WebSocketServer } from "ws";
 import roomManager from "../rooms/roomManager";
+import transferService, { FileMetaDataType } from "../../services/transfer/transferService";
+import transferRepository from "../../db/repositories/transferRepository";
 
 export const handleMessages = async (
   ws: WebSocket,
@@ -176,14 +178,28 @@ const handleIceCandidate = (
   }
 };
 
-const handleFileMetaData = (
+const handleFileMetaData = async (
   ws: WebSocket,
   message: WebSocketMessage & { type: "file-metadata" }
-): void => {
+): Promise<void> => {
   const { roomId, fileName, fileSize, fileType, fromClientId } = message;
 
   // store the file Metadata
+  const fileMetaDataExists = await transferRepository.getTransferByRoomId(roomId);
+  if(!fileMetaDataExists){
+    const metaData: FileMetaDataType = {
+      fileName,
+      fileSize,
+      fileType,
+      senderClient: fromClientId
+    }
 
+  await transferService.storeFileMetaData(roomId, metaData);
+    console.log(`New transfer created for room id: ${roomId}`);
+  }
+  else{
+    console.log(`Filemetadata already exists for the transfer for roomid: ${roomId}`);
+  }
   // Broadcast filemetadata to the other clients in room
   const otherClients = roomManager.getOtherClientsInRoom(roomId, ws);
   if (otherClients) {
@@ -238,11 +254,11 @@ const handleTransferProgress = (
 };
 
 
-const handleTransferComplete = (ws: WebSocket, message: WebSocketMessage & { type: 'transfer-complete' }): void => {
+const handleTransferComplete = async (ws: WebSocket, message: WebSocketMessage & { type: 'transfer-complete' }): Promise<void> => {
   const { roomId, fromClientId, toClientId } = message;
 
   // Update transfer Status also here
-
+  await transferService.updateTransferStatus(roomId, 'completed');
   // Broadcast the message to targetClient
   const targetClient = roomManager.getClientById(roomId, toClientId);
   if(targetClient){

@@ -57,7 +57,7 @@ class S3Service {
         Bucket: this.bucketName,
         Key: key,
         ResponseContentDisposition: fileName
-          ? `attatchment; filename="${encodeURIComponent(fileName)}`
+          ? `attachment; filename="${encodeURIComponent(fileName)}"`
           : undefined,
       });
 
