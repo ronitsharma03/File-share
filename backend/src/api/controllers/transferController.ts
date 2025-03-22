@@ -137,7 +137,7 @@ class TransferController {
     }catch(error){
       console.error(`Error: ${error}`);
       res.status(500).json({
-        error: error
+        error: `Error completing S3 upload: ${error}`
       })
     }
   }
