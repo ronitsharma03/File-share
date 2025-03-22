@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { Inter, Roboto } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/context/ThemeProvider";
-import MainNav from "@/components/ui/main-nav";
-import MobileNav from "@/components/ui/mobile-nav";
-import { UserNav } from "@/components/ui/user-nav";
+import MainNav from "@/components/Navbars/main-nav";
+import MobileNav from "@/components/Navbars/mobile-nav";
+import { UserNav } from "@/components/Navbars/user-nav";
 
 
 export const metadata: Metadata = {
@@ -27,7 +27,7 @@ export default function RootLayout({
       <body className={roboto.className}>
         <ThemeProvider>
           <div className="min-h-screen flex flex-col">
-            <header className="sticky top-0 z-40 border-b bg-background">
+            <header className="sticky top-0 z-40 border-b-2 border-zinc-700 bg-background">
               <div className="flex h-16 items-center justify-between py-4 ">
                 <div className="ml-56">
                   <MainNav />
@@ -38,7 +38,7 @@ export default function RootLayout({
                 <MobileNav />
               </div>
             </header>
-            <main className="flex-1 space-y-4 p-8 pt-6">
+            <main className="flex-1 space-y-4 p-8 pt-6 md:ml-46">
               <div className="container">{children}</div>
             </main>
           </div>

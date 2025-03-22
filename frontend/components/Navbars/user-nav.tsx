@@ -7,8 +7,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Button } from "./button";
-import { Avatar, AvatarFallback, AvatarImage } from "./avatar";
+import { Button } from "../ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { DropdownMenuGroup } from "@radix-ui/react-dropdown-menu";
 import { LogOutIcon, Settings2Icon } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -18,7 +18,7 @@ export function UserNav() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant={"ghost"} className="relative h-8 w-8 rounded-full">
+        <Button variant={"ghost"} className="relative h-8 w-8 rounded-full hover:cursor-pointer mr-56">
           <Avatar className="h-8 w-8">
             <AvatarImage />
             <AvatarFallback>US</AvatarFallback>

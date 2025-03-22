@@ -1,3 +1,4 @@
+import Dashboard from "@/components/dashboard/dashboard";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -7,6 +8,9 @@ export const metadata: Metadata = {
 };
 
 export default function Home() {
-  
-  return <div>DashBoard</div>;
+  return (
+    <div >
+      <Dashboard />
+    </div>
+  );
 }
