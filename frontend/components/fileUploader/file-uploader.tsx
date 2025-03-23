@@ -7,11 +7,12 @@ import { useRef, useState } from "react";
 import { Button } from "../ui/button";
 import { Progress } from "../ui/progress";
 import { toast, Toaster } from "sonner";
+import fileValidator from "./fileValidator";
+import { useTransferStore } from "../atoms/fileTransferAtoms";
 
 export default function FileUploader() {
   const [isDragging, setIsDragging] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
-  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const { file, setFile, roomId, setRoomId, transferId, setTransferId, uploadProgress, setUploadProgress, connnectionState, setConnectionState} = useTransferStore();
   const [showConfirmButtons, setShowConfirmButtons] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -72,8 +73,6 @@ export default function FileUploader() {
     setShowConfirmButtons(false);
     setIsSending(true);
   };
-
-  
 
   const handleCancel = () => {
     setFile(null);

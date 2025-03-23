@@ -25,7 +25,7 @@ export default function Dashboard() {
         text="Manage and share your files securely."
       />
       <Tabs
-        defaultValue="files"
+        defaultValue="send"
         className="space-y-4 mt-10"
         onValueChange={setActiveTab}
       >
@@ -34,7 +34,7 @@ export default function Dashboard() {
           <TabsTrigger value="receive">Receive</TabsTrigger>
           <TabsTrigger value="activity">Activity</TabsTrigger>
         </TabsList>
-        <TabsContent value="send" className="space-y-4 lg:mr-56 mt-6">
+        <TabsContent value="send" className="space-y-4 lg:mr-56">
           <FileUploader />
         </TabsContent>
         <TabsContent value="receive" className="space-y-4 lg:mr-56">
