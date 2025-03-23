@@ -19,6 +19,15 @@ interface TransferStore {
     connnectionState: ConnectionStateType;
     setConnectionState: (state: ConnectionStateType) => void;
 
+    isSending: boolean;
+    setIsSending: (value: boolean) => void;
+
+    showConfirmButtons: boolean;
+    setShowConfirmButtons: (value: boolean) => void;
+
+    wsConnection: WebSocket | null;
+    setWebSocketConnection: (ws: WebSocket) => void;
+
 }
 
 export const useTransferStore = create<TransferStore>((set) => ({
@@ -35,5 +44,14 @@ export const useTransferStore = create<TransferStore>((set) => ({
     setUploadProgress: (progress: number) => set({uploadProgress: progress}),
 
     connnectionState: 'disconnected',
-    setConnectionState: (state: ConnectionStateType) => set({connnectionState: state})
+    setConnectionState: (state: ConnectionStateType) => set({connnectionState: state}),
+
+    isSending: false,
+    setIsSending: (value: boolean) => set({isSending: value}),
+
+    showConfirmButtons: false,
+    setShowConfirmButtons: (value: boolean) => set({showConfirmButtons: value}),
+
+    wsConnection: null,
+    setWebSocketConnection: (ws: WebSocket) => set({wsConnection: ws}),
 }));

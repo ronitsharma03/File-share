@@ -14,6 +14,7 @@ import DashboardHeader from "./dashboard-header";
 import FileUploader from "../fileUploader/file-uploader";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
+import FilReceiver from "../fileReceiver/file-receiver";
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("send");
@@ -46,10 +47,7 @@ export default function Dashboard() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex w-full max-w-sm items-center space-x-4">
-                <Input type="text" placeholder="Room Id" />
-                <Button type="submit">Connect</Button>
-              </div>
+              <FilReceiver />
             </CardContent>
           </Card>
         </TabsContent>

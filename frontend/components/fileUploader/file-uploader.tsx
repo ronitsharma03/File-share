@@ -10,6 +10,7 @@ import { toast, Toaster } from "sonner";
 import fileValidator from "../services/fileValidator";
 import { useTransferStore } from "../atoms/fileTransferAtoms";
 import { createTransferEntry } from "../services/createTransferEntry";
+import { connectToRoom } from "../services/WebSocketMessages";
 
 export default function FileUploader() {
   const [isDragging, setIsDragging] = useState(false);
@@ -24,9 +25,13 @@ export default function FileUploader() {
     setUploadProgress,
     connnectionState,
     setConnectionState,
+    isSending,
+    setIsSending,
+    showConfirmButtons,
+    setShowConfirmButtons,
+    wsConnection,
+    setWebSocketConnection
   } = useTransferStore();
-  const [showConfirmButtons, setShowConfirmButtons] = useState(false);
-  const [isSending, setIsSending] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -92,6 +97,7 @@ export default function FileUploader() {
       setUploadProgress(progress);
     }, 300); // Completes in ~3 seconds
   };
+ 
 
   const handleSend = async () => {
     setShowConfirmButtons(false);
@@ -105,6 +111,16 @@ export default function FileUploader() {
       setRoomId(data.roomId);
     }
     setIsSending(true);
+    if(roomId){
+      const ws = await connectToRoom(roomId);
+      if(!ws){
+        toast.error(`Failed to connect to the Room: ${roomId}`)
+        return;
+      }
+      setWebSocketConnection(ws);
+      toast.success(`Connected to the Room: ${roomId}`);
+      
+    }
   };
 
   const handleCancel = () => {
@@ -114,11 +130,11 @@ export default function FileUploader() {
   };
 
   const handleRoomIdCopy = () => {
-    if(roomId){
+    if (roomId) {
       window.navigator.clipboard.writeText(roomId);
       toast.success(`Room Id: ${roomId} copied successfully`);
     }
-  }
+  };
 
   return (
     <Card>
@@ -169,7 +185,7 @@ export default function FileUploader() {
             <div className="mt-4">
               <h4 className="text-sm font-medium">
                 {isSending
-                  ? "Sending to connected user..."
+                  ? `Waiting for the user to connect... ${connnectionState}`
                   : "Uploading the file"}
               </h4>
               <div className="flex items-center justify-between mt-2">
@@ -192,7 +208,10 @@ export default function FileUploader() {
 
               {isSending ? (
                 <div className="flex items-center gap-2 mt-4">
-                  <Copy className="h-5 w-5 text-primary" onClick={handleRoomIdCopy}/>
+                  <Copy
+                    className="h-5 w-5 text-primary"
+                    onClick={handleRoomIdCopy}
+                  />
                   <p className="text-sm text-primary">{roomId}</p>
                 </div>
               ) : (
