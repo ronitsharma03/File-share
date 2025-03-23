@@ -1,40 +1,70 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import DashboardShell from "./dashborad-shell"
-import DashboardHeader from "./dashboard-header"
-import FileUploader from "../fileUploader/file-uploader"
-
+import { useState } from "react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import DashboardShell from "./dashborad-shell";
+import DashboardHeader from "./dashboard-header";
+import FileUploader from "../fileUploader/file-uploader";
+import { Input } from "../ui/input";
+import { Button } from "../ui/button";
 
 export default function Dashboard() {
-  const [activeTab, setActiveTab] = useState("files")
+  const [activeTab, setActiveTab] = useState("send");
 
   return (
     <DashboardShell>
-      <DashboardHeader heading="Dashboard" text="Manage and share your files securely." />
-      <Tabs defaultValue="files" className="space-y-4 mt-10" onValueChange={setActiveTab}>
+      <DashboardHeader
+        heading="Dashboard"
+        text="Manage and share your files securely."
+      />
+      <Tabs
+        defaultValue="files"
+        className="space-y-4 mt-10"
+        onValueChange={setActiveTab}
+      >
         <TabsList>
-          <TabsTrigger value="files">Files</TabsTrigger>
+          <TabsTrigger value="send">Send</TabsTrigger>
+          <TabsTrigger value="receive">Receive</TabsTrigger>
           <TabsTrigger value="activity">Activity</TabsTrigger>
         </TabsList>
-        <TabsContent value="files" className="space-y-4">
+        <TabsContent value="send" className="space-y-4 lg:mr-56 mt-6">
           <FileUploader />
         </TabsContent>
-        <TabsContent value="activity" className="space-y-4">
+        <TabsContent value="receive" className="space-y-4 lg:mr-56">
+          <Card>
+            <CardHeader>
+              <CardTitle>Receive the file</CardTitle>
+              <CardDescription>
+                Paste the shared code here to receive your file
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex w-full max-w-sm items-center space-x-4">
+                <Input type="text" placeholder="Room Id" />
+                <Button type="submit">Connect</Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="activity" className="space-y-4 lg:mr-56">
           <Card>
             <CardHeader>
               <CardTitle>Recent Activity</CardTitle>
-              <CardDescription>Your recent file sharing activity.</CardDescription>
+              <CardDescription>
+                Your recent file sharing activity.
+              </CardDescription>
             </CardHeader>
-            <CardContent>
-              Activity here
-            </CardContent>
+            <CardContent>Activity here</CardContent>
           </Card>
         </TabsContent>
       </Tabs>
     </DashboardShell>
-  )
+  );
 }
-

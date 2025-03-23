@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { useRef, useState } from "react";
 import { Button } from "../ui/button";
 import { Progress } from "../ui/progress";
-import { Toaster } from "sonner";
+import { toast, Toaster } from "sonner";
 
 export default function FileUploader() {
   const [isDragging, setIsDragging] = useState(false);
@@ -15,7 +15,6 @@ export default function FileUploader() {
   const [showConfirmButtons, setShowConfirmButtons] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [fileLimitAlert, setFileLimitAlert] = useState<boolean>(false);
 
   const MAX_FILE_SIZE = 2*1024*1024*1024; // 2GB limit
 
@@ -41,10 +40,9 @@ export default function FileUploader() {
     if (e.target.files && e.target.files.length > 0) {
       const selectedFile = e.target.files[0];
       if (selectedFile.size > MAX_FILE_SIZE) {
-        setFileLimitAlert(true);
+        toast.error("File size exceeds the limit of 2GB"); 
         return;
       }
-      setFileLimitAlert(false);
       handleFile(selectedFile);
     }
   };
@@ -75,6 +73,8 @@ export default function FileUploader() {
     setIsSending(true);
   };
 
+  
+
   const handleCancel = () => {
     setFile(null);
     setUploadProgress(0);
@@ -84,7 +84,7 @@ export default function FileUploader() {
   return (
     <Card>
       <CardContent>
-        {fileLimitAlert && <Toaster />}
+        <Toaster />
         <div
           className={cn(
             "border-2 border-dashed rounded-lg p-8 text-center transition-colors",

@@ -29,7 +29,7 @@ export default function RootLayout({
           <div className="min-h-screen flex flex-col">
             <header className="sticky top-0 z-40 border-b-2 border-zinc-700 bg-background">
               <div className="flex h-16 items-center justify-between py-4 ">
-                <div className="ml-56">
+                <div className="lg:ml-56 ml-10">
                   <MainNav />
                 </div>
                 <div className="hidden md:flex mr-4">
@@ -38,7 +38,7 @@ export default function RootLayout({
                 <MobileNav />
               </div>
             </header>
-            <main className="flex-1 space-y-4 p-8 pt-6 md:ml-46">
+            <main className="flex-1 space-y-4 p-8 pt-6 lg:ml-46">
               <div className="container">{children}</div>
             </main>
           </div>
