@@ -1,23 +1,36 @@
 "use client";
 
-import { Upload, X, Send } from "lucide-react";
+import { Upload, X, Send, Copy } from "lucide-react";
 import { Card, CardContent } from "../ui/card";
 import { cn } from "@/lib/utils";
 import { useRef, useState } from "react";
 import { Button } from "../ui/button";
 import { Progress } from "../ui/progress";
 import { toast, Toaster } from "sonner";
-import fileValidator from "./fileValidator";
+import fileValidator from "../services/fileValidator";
 import { useTransferStore } from "../atoms/fileTransferAtoms";
+import { createTransferEntry } from "../services/createTransferEntry";
 
 export default function FileUploader() {
   const [isDragging, setIsDragging] = useState(false);
-  const { file, setFile, roomId, setRoomId, transferId, setTransferId, uploadProgress, setUploadProgress, connnectionState, setConnectionState} = useTransferStore();
+  const {
+    file,
+    setFile,
+    roomId,
+    setRoomId,
+    transferId,
+    setTransferId,
+    uploadProgress,
+    setUploadProgress,
+    connnectionState,
+    setConnectionState,
+  } = useTransferStore();
   const [showConfirmButtons, setShowConfirmButtons] = useState(false);
   const [isSending, setIsSending] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const MAX_FILE_SIZE = 2*1024*1024*1024; // 2GB limit
+  const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2GB limit
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -37,11 +50,21 @@ export default function FileUploader() {
     }
   };
 
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return bytes + " bytes";
+    else if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + " KB";
+    else if (bytes < 1024 * 1024 * 1024)
+      return (bytes / (1024 * 1024)).toFixed(2) + " MB";
+    else return (bytes / (1024 * 1024 * 1024)).toFixed(2) + " GB";
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const selectedFile = e.target.files[0];
-      if (selectedFile.size > MAX_FILE_SIZE) {
-        toast.error("File size exceeds the limit of 2GB"); 
+      const fileValidationResult = fileValidator.validateFile(selectedFile);
+      console.log(fileValidationResult);
+      if (!fileValidationResult.valid) {
+        toast.error(`${fileValidationResult.error}`);
         return;
       }
       handleFile(selectedFile);
@@ -64,21 +87,38 @@ export default function FileUploader() {
         progress = 100;
         clearInterval(interval);
         setShowConfirmButtons(true); // Show send/cancel buttons
+        toast.success("File ready to send");
       }
       setUploadProgress(progress);
     }, 300); // Completes in ~3 seconds
   };
 
-  const handleSend = () => {
+  const handleSend = async () => {
     setShowConfirmButtons(false);
+    if (file) {
+      const data = await createTransferEntry(file, "ronitkhajuria03@gmail.com");
+      if (!data) {
+        toast.error("Try again...");
+        return;
+      }
+      setTransferId(data.transferId);
+      setRoomId(data.roomId);
+    }
     setIsSending(true);
   };
 
   const handleCancel = () => {
-    setFile(null);
     setUploadProgress(0);
     setShowConfirmButtons(false);
+    setFile(null);
   };
+
+  const handleRoomIdCopy = () => {
+    if(roomId){
+      window.navigator.clipboard.writeText(roomId);
+      toast.success(`Room Id: ${roomId} copied successfully`);
+    }
+  }
 
   return (
     <Card>
@@ -133,7 +173,12 @@ export default function FileUploader() {
                   : "Uploading the file"}
               </h4>
               <div className="flex items-center justify-between mt-2">
-                <p className="text-sm font-medium">{file.name}</p>
+                <div className="flex items-center gap-5">
+                  <p className="text-sm font-medium">{file.name}</p>
+                  <p className="text-xs font-light">
+                    {formatFileSize(file.size)}
+                  </p>
+                </div>
                 <Button
                   variant={"ghost"}
                   size={"icon"}
@@ -144,12 +189,20 @@ export default function FileUploader() {
                   <span className="sr-only">Remove file</span>
                 </Button>
               </div>
-              <div className="flex items-center gap-2 mt-2">
-                <Progress value={uploadProgress} className="h-2" />
-                <span className="text-xs text-muted-foreground w-10">
-                  {Math.round(uploadProgress)} %
-                </span>
-              </div>
+
+              {isSending ? (
+                <div className="flex items-center gap-2 mt-4">
+                  <Copy className="h-5 w-5 text-primary" onClick={handleRoomIdCopy}/>
+                  <p className="text-sm text-primary">{roomId}</p>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 mt-2">
+                  <Progress value={uploadProgress} className="h-2" />
+                  <span className="text-xs text-muted-foreground w-10">
+                    {Math.round(uploadProgress)} %
+                  </span>
+                </div>
+              )}
 
               {showConfirmButtons && (
                 <div className="flex justify-center gap-4 mt-4">
@@ -159,13 +212,6 @@ export default function FileUploader() {
                   <Button size="sm" onClick={handleSend}>
                     Send
                   </Button>
-                </div>
-              )}
-
-              {isSending && (
-                <div className="flex items-center gap-2 mt-4">
-                  <Send className="h-5 w-5 text-primary animate-bounce" />
-                  <p className="text-sm text-primary">Sending...</p>
                 </div>
               )}
             </div>
