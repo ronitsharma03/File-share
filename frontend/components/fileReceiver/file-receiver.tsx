@@ -1,61 +1,205 @@
 import { toast, Toaster } from "sonner";
 import { useTransferStore } from "../atoms/fileTransferAtoms";
-import { connectToRoom } from "../services/WebSocketMessages";
+import {
+  connectToRoom,
+  setUpWebSocketEventHandler,
+} from "../services/WebSocketMessages";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { v4 as uuidV4 } from "uuid";
+import { Badge, Download, Loader2 } from "lucide-react";
+import { Card } from "../ui/card";
+import { formatFileSize } from "../services/fileFormat";
+import { Progress } from "../ui/progress";
 
 export default function FilReceiver() {
-  const { roomId, setRoomId, setWebSocketConnection, wsConnection } =
-    useTransferStore();
+  const {
+    roomId,
+    setRoomId,
+    setWebSocketConnection,
+    wsConnection,
+    uploadProgress,
+    setUploadProgress,
+    connectionState,
+    setConnectionState,
+    isConnecting,
+    setIsConnecting,
+    downloadUrl,
+    setDownloadUrl,
+    fileMetaData,
+    setFileMetaData
+  } = useTransferStore();
 
   const handleConnect = async () => {
     if (!roomId) {
+      toast.error("Please enter a room ID");
       return;
     }
+    setIsConnecting(true);
+    setConnectionState("connecting");
+
     try {
+      const clientId = uuidV4();
       // Use await to wait for the Promise to resolve
-      const ws = await connectToRoom(roomId);
+      const ws = await connectToRoom(roomId, clientId);
 
       if (!ws) {
         toast.error(`Cannot connect to Room: ${roomId}`);
+        setConnectionState("failed");
+        setIsConnecting(false);
         return;
       }
 
-      toast.success(`Connected to the Room: ${roomId}`);
-      setWebSocketConnection(ws);
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(
-          JSON.stringify({
-            type: 'room-join',
-            roomId: roomId,
-          })
-        );
-        toast.success("Message sent succesfully");
-      }
+      setUpWebSocketEventHandler(ws, false, {
+        onRoomJoined: (clients) => {
+          toast.success(`Connected to room: ${roomId}`);
+          setConnectionState("connected");
+        },
+        onFileMetaData: (metadata) => {
+          toast.info(`File ready to receive: ${metadata.fileName}`);
+          setFileMetaData({
+            fileName: metadata.fileName,
+            fileSize: metadata.fileSize,
+            fileType: metadata.fileType,
+          });
+
+          // Send transfer-ready message
+          ws.send(
+            JSON.stringify({
+              type: "transfer-ready",
+              roomId: roomId,
+              fromClientId: clientId,
+              toClientId: metadata.fromClientId,
+            })
+          );
+        },
+        onTransferProgress: (progress) => {
+          setUploadProgress(progress);
+        },
+        onTransferComplete: () => {
+          toast.success("File transfer completed!");
+        },
+        onTransferError: (error) => {
+          toast.error(`Transfer error: ${error}`);
+          setConnectionState("failed");
+        },
+      });
     } catch (error) {
       toast.error(`Error connecting to Room: ${error}`);
+      setConnectionState("failed");
+    } finally {
+      setIsConnecting(false);
     }
   };
 
+  useEffect(() => {
+    return () => {
+      if (wsConnection) {
+        wsConnection.close();
+      }
+    };
+  }, [wsConnection]);
+
   return (
-    <div className="flex w-full items-center space-x-4">
+    <div className="space-y-4">
       <Toaster />
-      {wsConnection ? (
-        `Connected to ${roomId}`
+
+      {connectionState !== "connected" ? (
+        <div className="flex flex-col space-y-4">
+          <div className="flex items-center space-x-4">
+            <Input
+              type="text"
+              placeholder="Enter Room ID"
+              value={roomId || ""}
+              onChange={(e) => {
+                setRoomId(e.target.value);
+              }}
+              disabled={isConnecting}
+            />
+            <Button
+              type="submit"
+              onClick={handleConnect}
+              disabled={isConnecting || !roomId}
+            >
+              {isConnecting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Connecting...
+                </>
+              ) : (
+                "Connect"
+              )}
+            </Button>
+          </div>
+
+          {connectionState === "failed" && (
+            <Badge fontVariant="destructive" className="self-start">
+              Connection failed. Please try again.
+            </Badge>
+          )}
+        </div>
       ) : (
-        <div className="flex items-center max-w-sm space-x-4">
-          <Input
-            type="text"
-            placeholder="Room Id"
-            onChange={(e) => {
-              setRoomId(e.target.value);
-            }}
-          />
-          <Button type="submit" onClick={handleConnect}>
-            Connect
-          </Button>
-          <p>{roomId}</p>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <Badge fontVariant="default">Connected to Room: {roomId}</Badge>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (wsConnection) {
+                  wsConnection.close();
+                  setWebSocketConnection(null);
+                }
+                setConnectionState("disconnected");
+                setFileMetaData(null);
+                setUploadProgress(0);
+              }}
+            >
+              Disconnect
+            </Button>
+          </div>
+
+          {fileMetaData ? (
+            <Card className="p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-medium">{fileMetaData.fileName}</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {formatFileSize(fileMetaData.fileSize)}
+                  </p>
+                </div>
+
+                {downloadUrl && (
+                  <Button variant="outline" size="sm" asChild>
+                    <a
+                      href={downloadUrl}
+                      download
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <Download className="mr-2 h-4 w-4" />
+                      Download
+                    </a>
+                  </Button>
+                )}
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-sm">
+                  <span>Transfer Progress</span>
+                  <span>{uploadProgress}%</span>
+                </div>
+                <Progress value={uploadProgress} className="h-2" />
+              </div>
+            </Card>
+          ) : (
+            <div className="flex items-center justify-center p-8 border border-dashed rounded-md">
+              <p className="text-muted-foreground">
+                Waiting for sender to share a file...
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>

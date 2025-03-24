@@ -1,8 +1,13 @@
 import { create } from 'zustand';
 
 
-type ConnectionStateType = 'disconnected' | 'connected' | 'pending' | 'failed' | null;
+type ConnectionStateType = 'disconnected' | 'connected' | 'connecting' | 'failed' | null;
 
+interface fileMetaDataType {
+    fileName: string;
+    fileSize: number;
+    fileType: string;
+};
 interface TransferStore {
     transferId: string | null;
     setTransferId: (id: string) => void;
@@ -16,7 +21,7 @@ interface TransferStore {
     uploadProgress : number;
     setUploadProgress: (progress: number) => void;
 
-    connnectionState: ConnectionStateType;
+    connectionState: ConnectionStateType;
     setConnectionState: (state: ConnectionStateType) => void;
 
     isSending: boolean;
@@ -26,7 +31,24 @@ interface TransferStore {
     setShowConfirmButtons: (value: boolean) => void;
 
     wsConnection: WebSocket | null;
-    setWebSocketConnection: (ws: WebSocket) => void;
+    setWebSocketConnection: (ws: WebSocket | null) => void;
+
+    connectedClients: string[];
+    addConnectedClient: (clientId: string) => void;
+    removeConnectedClient: (clientId: string) => void;
+
+    isConnecting: boolean;
+    setIsConnecting: (value: boolean) => void;
+
+    fileMetaData: fileMetaDataType | null;
+    setFileMetaData: (fileData: fileMetaDataType | null) => void;
+
+    downloadUrl: string | null;
+    setDownloadUrl: (url: string) => void;
+
+    userId: string;
+    setUserId: (id: string) => void;
+
 
 }
 
@@ -43,8 +65,8 @@ export const useTransferStore = create<TransferStore>((set) => ({
     uploadProgress: 0,
     setUploadProgress: (progress: number) => set({uploadProgress: progress}),
 
-    connnectionState: 'disconnected',
-    setConnectionState: (state: ConnectionStateType) => set({connnectionState: state}),
+    connectionState: null,
+    setConnectionState: (state: ConnectionStateType) => set({connectionState: state}),
 
     isSending: false,
     setIsSending: (value: boolean) => set({isSending: value}),
@@ -53,5 +75,27 @@ export const useTransferStore = create<TransferStore>((set) => ({
     setShowConfirmButtons: (value: boolean) => set({showConfirmButtons: value}),
 
     wsConnection: null,
-    setWebSocketConnection: (ws: WebSocket) => set({wsConnection: ws}),
+    setWebSocketConnection: (ws: WebSocket | null) => set({wsConnection: ws}),
+
+    connectedClients: [],
+    addConnectedClient: (clientId: string) => set((state) => ({
+        connectedClients: [...state.connectedClients, clientId]
+    })),
+    removeConnectedClient: (clientId: string) => set((state) => ({
+        connectedClients: state.connectedClients.filter(id => id !== clientId)
+    })),
+
+    isConnecting: false,
+    setIsConnecting: (value: boolean) => set({isConnecting: value}),
+
+    fileMetaData: null,
+    setFileMetaData: (fileData: fileMetaDataType | null) => set({fileMetaData: fileData}),
+
+    downloadUrl: null,
+    setDownloadUrl: (url: string) => set({downloadUrl: url}),
+
+    userId: '',
+    setUserId: (id: string) => set({userId: id}),
+
+
 }));

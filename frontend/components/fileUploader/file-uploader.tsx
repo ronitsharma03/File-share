@@ -1,19 +1,26 @@
 "use client";
 
-import { Upload, X, Send, Copy } from "lucide-react";
+import { Upload, X, Send, Copy, Badge, Loader2 } from "lucide-react";
 import { Card, CardContent } from "../ui/card";
 import { cn } from "@/lib/utils";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "../ui/button";
 import { Progress } from "../ui/progress";
 import { toast, Toaster } from "sonner";
 import fileValidator from "../services/fileValidator";
 import { useTransferStore } from "../atoms/fileTransferAtoms";
 import { createTransferEntry } from "../services/createTransferEntry";
-import { connectToRoom } from "../services/WebSocketMessages";
+import {
+  connectToRoom,
+  setUpWebSocketEventHandler,
+} from "../services/WebSocketMessages";
+import { v4 as uuidV4 } from "uuid";
+import { formatFileSize } from "../services/fileFormat";
 
 export default function FileUploader() {
   const [isDragging, setIsDragging] = useState(false);
+  const [isCreatingTransfer, setIsCreatingTransfer] = useState(false);
+
   const {
     file,
     setFile,
@@ -23,19 +30,28 @@ export default function FileUploader() {
     setTransferId,
     uploadProgress,
     setUploadProgress,
-    connnectionState,
+    connectionState,
     setConnectionState,
     isSending,
     setIsSending,
     showConfirmButtons,
     setShowConfirmButtons,
     wsConnection,
-    setWebSocketConnection
+    setWebSocketConnection,
+    connectedClients,
+    addConnectedClient,
+    userId,
+    setUserId
   } = useTransferStore();
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2GB limit
+
+  useEffect(() => {
+    const clientId = uuidV4();
+    setUserId(clientId);
+  }, [])
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -53,14 +69,6 @@ export default function FileUploader() {
     if (e.dataTransfer.files.length > 0) {
       handleFile(e.dataTransfer.files[0]);
     }
-  };
-
-  const formatFileSize = (bytes: number): string => {
-    if (bytes < 1024) return bytes + " bytes";
-    else if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + " KB";
-    else if (bytes < 1024 * 1024 * 1024)
-      return (bytes / (1024 * 1024)).toFixed(2) + " MB";
-    else return (bytes / (1024 * 1024 * 1024)).toFixed(2) + " GB";
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -87,7 +95,7 @@ export default function FileUploader() {
   const simulateUpload = () => {
     let progress = 0;
     const interval = setInterval(() => {
-      progress += 10; // Fixed increment for smooth progress
+      progress += 30; // Fixed increment for smooth progress
       if (progress >= 100) {
         progress = 100;
         clearInterval(interval);
@@ -97,29 +105,94 @@ export default function FileUploader() {
       setUploadProgress(progress);
     }, 300); // Completes in ~3 seconds
   };
- 
 
   const handleSend = async () => {
     setShowConfirmButtons(false);
-    if (file) {
-      const data = await createTransferEntry(file, "ronitkhajuria03@gmail.com");
-      if (!data) {
-        toast.error("Try again...");
-        return;
-      }
-      setTransferId(data.transferId);
-      setRoomId(data.roomId);
+    if (!file) {
+      toast.error("Please select a file filrst");
+      return;
     }
-    setIsSending(true);
-    if(roomId){
-      const ws = await connectToRoom(roomId);
-      if(!ws){
-        toast.error(`Failed to connect to the Room: ${roomId}`)
+    setIsCreatingTransfer(true);
+    setConnectionState("connecting");
+
+    try {
+      const response = await createTransferEntry(
+        file,
+        "ronitkhajuria03@gmail.com"
+      );
+      if (!response?.status || !response?.data) {
+        toast.error(
+          `Error in initiating transfer: ${response?.error || "Unknows error"}`
+        );
+        setConnectionState("failed");
+        setIsCreatingTransfer(false);
         return;
       }
+
+      setTransferId(response.data.transferId);
+      setRoomId(response.data.roomId);
+
+      const clientId = userId;
+      const ws = await connectToRoom(response.data.roomId, clientId);
+
+      if (!ws) {
+        toast.error(`Failed to connect to the room: ${response.data.roomId}`);
+        setConnectionState("failed");
+        setIsCreatingTransfer(false);
+        return;
+      }
+
+      setUpWebSocketEventHandler(ws, true, {
+        onClientJoined: (clientId) => {
+          toast.success(`Receiver connected: ${clientId}`);
+          addConnectedClient(clientId);
+
+          if (file) {
+            ws.send(
+              JSON.stringify({
+                type: "file-metadata",
+                roomId: response.data?.roomId,
+                fileName: file.name,
+                fileSize: file.size,
+                fileType: file.type,
+                fromClientId: clientId,
+              })
+            );
+          }
+        },
+
+        onTransferProgress: (progress: number) => {
+          setUploadProgress(progress);
+        },
+
+        onTransferComplete: () => {
+          toast.success(`File Transfer completed`);
+          setIsSending(false);
+          setConnectionState("disconnected");
+        },
+
+        onTransferError: (error) => {
+          toast.error(`Transfer error: ${error}`);
+          setConnectionState("failed");
+        },
+        onRoomJoined: (clients) => {
+          toast.success(`Connected to the room: ${response.data?.roomId}`);
+          setConnectionState("connected");
+        },
+      });
+
       setWebSocketConnection(ws);
-      toast.success(`Connected to the Room: ${roomId}`);
-      
+      setIsSending(true);
+
+      toast.success(
+        `Ready for transfer share the roomID: ${response.data.roomId}`
+      );
+    } catch (error) {
+      console.error("Error in handleSend:", error);
+      toast.error(`Error: ${error}`);
+      setConnectionState("failed");
+    } finally {
+      setIsCreatingTransfer(false);
     }
   };
 
@@ -132,9 +205,17 @@ export default function FileUploader() {
   const handleRoomIdCopy = () => {
     if (roomId) {
       window.navigator.clipboard.writeText(roomId);
-      toast.success(`Room Id: ${roomId} copied successfully`);
+      toast.success(`Room Id: ${roomId} copied to clipboard`);
     }
   };
+
+  useEffect(() => {
+    return () => {
+      if (wsConnection) {
+        wsConnection.close();
+      }
+    };
+  }, [wsConnection]);
 
   return (
     <Card>
@@ -185,41 +266,69 @@ export default function FileUploader() {
             <div className="mt-4">
               <h4 className="text-sm font-medium">
                 {isSending
-                  ? `Waiting for the user to connect... ${connnectionState}`
-                  : "Uploading the file"}
+                  ? connectionState === 'connected' ? `Receiver connected` : `Waiting for the user to connect...`
+                  : "File ready to send"}
               </h4>
               <div className="flex items-center justify-between mt-2">
-                <div className="flex items-center gap-5">
+                <div className="flex items-center gap-2">
                   <p className="text-sm font-medium">{file.name}</p>
-                  <p className="text-xs font-light">
+                  <span className="text-xs text-muted-foreground">
                     {formatFileSize(file.size)}
-                  </p>
+                  </span>
                 </div>
                 <Button
-                  variant={"ghost"}
-                  size={"icon"}
+                  variant="ghost"
+                  size="icon"
                   className="h-6 w-6"
                   onClick={handleCancel}
                 >
                   <X className="w-4 h-4 hover:cursor-pointer" />
-                  <span className="sr-only">Remove file</span>
                 </Button>
               </div>
 
-              {isSending ? (
-                <div className="flex items-center gap-2 mt-4">
-                  <Copy
-                    className="h-5 w-5 text-primary"
-                    onClick={handleRoomIdCopy}
-                  />
-                  <p className="text-sm text-primary">{roomId}</p>
-                </div>
-              ) : (
+              {!isSending ? (
                 <div className="flex items-center gap-2 mt-2">
                   <Progress value={uploadProgress} className="h-2" />
                   <span className="text-xs text-muted-foreground w-10">
-                    {Math.round(uploadProgress)} %
+                    {uploadProgress}%
                   </span>
+                </div>
+              ) : (
+                <div className="mt-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Badge
+                      fontVariant={
+                        connectionState === "connected"
+                          ? "default"
+                          : connectionState === "connecting"
+                          ? "outline"
+                          : connectionState === "failed"
+                          ? "destructive"
+                          : "secondary"
+                      }
+                    >
+                      {connectionState}
+                    </Badge>
+
+                    {connectedClients.length > 0 && (
+                      <Badge fontVariant="outline">
+                        {connectedClients.length} user(s) connected
+                      </Badge>
+                    )}
+                  </div>
+                  {roomId && (
+                    <div className="flex items-center justify-between p-2 bg-muted rounded-md">
+                      <code className="text-sm">{roomId}</code>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleRoomIdCopy}
+                        className="h-8 w-8 p-0"
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -228,8 +337,19 @@ export default function FileUploader() {
                   <Button size="sm" variant="outline" onClick={handleCancel}>
                     Cancel
                   </Button>
-                  <Button size="sm" onClick={handleSend}>
-                    Send
+                  <Button
+                    size="sm"
+                    onClick={handleSend}
+                    disabled={isCreatingTransfer}
+                  >
+                    {isCreatingTransfer ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Creating Transfer...
+                      </>
+                    ) : (
+                      "Send"
+                    )}
                   </Button>
                 </div>
               )}
