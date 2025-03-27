@@ -31,6 +31,7 @@ export default function FileUploader() {
   const [isDragging, setIsDragging] = useState(false);
   const [isCreatingTransfer, setIsCreatingTransfer] = useState(false);
   const [receiverConnected, setReceiverConnected] = useState(false);
+  const [pc, setPc] = useState<RTCPeerConnection | null>(null);
 
   const {
     file,
@@ -194,6 +195,7 @@ export default function FileUploader() {
               );
             }
           );
+          setPc(pc);
 
           // Store references
           setPeerConnection(pc);
@@ -258,23 +260,21 @@ export default function FileUploader() {
           setClientId("");
         },
         onAnswer: async (message: any) => {
-          if (peerConnection && message.sdp) {
+          // if (peerConnection && message.sdp) {
             console.log("Setting remote description with answer:", message.sdp);
             try {
-              await peerConnection.setRemoteDescription(
-                new RTCSessionDescription(message.sdp)
-              );
+              await pc?.setRemoteDescription(message.sdp);
               console.log("Remote description set successfully");
             } catch (error) {
               console.error("Error setting remote description:", error);
               toast.error("Failed to establish connection with receiver");
             }
-          }
+          // }
         },
         onIceCandidate: async (message) => {
-          if (peerConnection && message.candidate) {
+          if (pc && message.candidate) {
             try {
-              await peerConnection.addIceCandidate(
+              await pc.addIceCandidate(
                 new RTCIceCandidate(message.candidate)
               );
             } catch (error) {
@@ -322,96 +322,6 @@ export default function FileUploader() {
       }
     };
   }, [wsConnection]);
-
-  // Add a function to handle sending the file
-  const sendFile = async (file: File, dataChannel: RTCDataChannel) => {
-    // Check if the data channel is open
-    if (dataChannel.readyState !== "open") {
-      console.error("Data channel is not open!");
-      toast.error("Connection is not ready for file transfer");
-      return;
-    }
-
-    const CHUNK_SIZE = 16384; // 16 KB chunks
-    const fileReader = new FileReader();
-    let offset = 0;
-    let chunkCount = 0;
-    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-
-    console.log(
-      `Starting file transfer: ${file.name}, size: ${file.size}, chunks: ${totalChunks}`
-    );
-
-    // First, send file metadata
-    try {
-      const fileMetadata = {
-        name: file.name,
-        type: file.type,
-        size: file.size,
-        totalChunks: totalChunks,
-      };
-      dataChannel.send(
-        JSON.stringify({ type: "metadata", data: fileMetadata })
-      );
-      console.log("Sent file metadata", fileMetadata);
-    } catch (error) {
-      console.error("Error sending metadata:", error);
-      toast.error("Error initiating file transfer");
-      return;
-    }
-
-    fileReader.onload = (e) => {
-      try {
-        if (e.target?.result && dataChannel.readyState === "open") {
-          // Need to send ArrayBuffer, not string
-          const arrayBuffer = e.target.result as ArrayBuffer;
-          dataChannel.send(arrayBuffer);
-          chunkCount++;
-          offset += arrayBuffer.byteLength;
-
-          // Update progress
-          const progress = Math.min(
-            100,
-            Math.floor((offset / file.size) * 100)
-          );
-          setUploadProgress(progress);
-          console.log(
-            `Sent chunk ${chunkCount}/${totalChunks}, progress: ${progress}%`
-          );
-
-          if (offset < file.size) {
-            // Small delay to prevent overwhelming the data channel
-            setTimeout(() => readSlice(offset), 0);
-          } else {
-            // File transfer completed
-            console.log("All chunks sent, sending completion message");
-            dataChannel.send(JSON.stringify({ type: "complete" }));
-            toast.success("File transfer completed!");
-          }
-        }
-      } catch (error) {
-        console.error("Error sending chunk:", error);
-        toast.error("Error during file transfer");
-      }
-    };
-
-    fileReader.onerror = (error) => {
-      console.error("FileReader error:", error);
-      toast.error("Error reading file");
-    };
-
-    const readSlice = (o: number) => {
-      try {
-        const slice = file.slice(o, o + CHUNK_SIZE);
-        fileReader.readAsArrayBuffer(slice);
-      } catch (error) {
-        console.error("Error reading slice:", error);
-        toast.error("Error processing file");
-      }
-    };
-
-    readSlice(0);
-  };
 
   return (
     <Card>

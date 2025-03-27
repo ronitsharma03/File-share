@@ -21,7 +21,7 @@ export function createPeerConnectionSender(
   roomId: string,
   senderId: string,
   receiverId: string | null,
-  onOfferCreated: (offer: string) => void
+  onOfferCreated: (offer: any) => void
 ) {
   const pc = new RTCPeerConnection(rtcConfig);
   const dataChannel = pc.createDataChannel("fileTransfer");
@@ -54,12 +54,10 @@ export function createPeerConnectionSender(
 
   pc.onnegotiationneeded = async () => {
     try {
-      const offer: any = await pc.createOffer();
+      const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      if (pc.localDescription) {
-        // FIXED: Pass a properly formatted RTCSessionDescriptionInit object
-        onOfferCreated(offer.sdp);
-      }
+
+      onOfferCreated(offer.sdp);
     } catch (error) {
       console.error(`Error creating the offer :${error}`);
     }
@@ -81,7 +79,7 @@ export async function createPeerConnectionReceiver(
   roomId: string,
   receiverId: string,
   senderId: string,
-  offer: any,
+  offer: string
 ): Promise<RTCPeerConnection> {
   const pc = new RTCPeerConnection(rtcConfig);
 
@@ -120,29 +118,28 @@ export async function createPeerConnectionReceiver(
     };
   };
 
-  
-    
-  await pc.setRemoteDescription(offer);
+  await pc.setRemoteDescription({ type: "offer", sdp: offer });
   console.log("Remote description set successfully");
-  
+
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
   console.log("Local description set successfully");
 
-  // FIXED: Send only the needed properties in the correct format
-  ws.send(
-    JSON.stringify({
-      type: "answer",
-      roomId: roomId,
-      sdp: {
-        type: pc.localDescription?.type,
-        sdp: pc.localDescription?.sdp
-      },
-      fromClientId: receiverId,
-      toClientId: senderId,
-    })
-  );
-  
+  try{
+
+    ws.send(
+      JSON.stringify({
+        type: "answer",
+        roomId: roomId,
+        sdp: answer.sdp,
+        fromClientId: receiverId,
+        toClientId: senderId,
+      })
+    );
+    console.log(`Answer sent to the sender successfully`);
+  }catch(error){
+    console.error(`Error sending the answer to the sender ${error}`);
+  }
 
   return pc;
 }

@@ -1,4 +1,5 @@
 interface OfferAnswerMessage {
+  type: 'offer' | 'answer';
   roomId: string;
   sdp: string;
   fromClientId: string;
