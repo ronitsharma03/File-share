@@ -29,15 +29,11 @@ export const createTransferEntry = async (
     });
 
     if (!response.data) {
-    //   toast.error("Error initiating a transfer..");
       return null;
     }
-
-    // toast.success("Successfully initiated a transfer..");
     return { data: response.data, status: true };
   } catch (error) {
     console.error("Error creating a transfer");
-    // toast.error("Error initiating a transfer..");
     return { data: null, status: false, error: `${error}` };
   }
 };

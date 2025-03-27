@@ -12,6 +12,7 @@ import { Badge, Download, Loader2 } from "lucide-react";
 import { Card } from "../ui/card";
 import { formatFileSize } from "../services/fileFormat";
 import { Progress } from "../ui/progress";
+import { createPeerConnectionReceiver } from "../services/peerConnection";
 
 export default function FilReceiver() {
   const {
@@ -28,8 +29,45 @@ export default function FilReceiver() {
     downloadUrl,
     setDownloadUrl,
     fileMetaData,
-    setFileMetaData
+    setFileMetaData,
+    removeConnectedClient,
+    userId,
+    setUserId,
+    clientId,
+    setClientId,
+    peerConnection,
+    setPeerConnection,
   } = useTransferStore();
+
+  useEffect(() => {
+    const userId = uuidV4();
+    setUserId(userId);
+  }, []);
+
+  useEffect(() => {
+    if (peerConnection) {
+      peerConnection.onconnectionstatechange = () => {
+        toast.info("Connection state changed");
+        console.log(
+          "Connection state changed: ",
+          peerConnection.connectionState
+        );
+      };
+
+      if (peerConnection.connectionState === "connected") {
+        toast.success("Peer-to-peer connection established");
+      } else if (
+        peerConnection.connectionState === "disconnected" ||
+        peerConnection.connectionState === "failed"
+      ) {
+        toast.error("Peer connection lost");
+      }
+
+      peerConnection.oniceconnectionstatechange = () => {
+        console.log("ICE connection state:", peerConnection.iceConnectionState);
+      };
+    }
+  }, [peerConnection]);
 
   const handleConnect = async () => {
     if (!roomId) {
@@ -40,9 +78,7 @@ export default function FilReceiver() {
     setConnectionState("connecting");
 
     try {
-      const clientId = uuidV4();
-      // Use await to wait for the Promise to resolve
-      const ws = await connectToRoom(roomId, clientId);
+      const ws = await connectToRoom(roomId, userId);
 
       if (!ws) {
         toast.error(`Cannot connect to Room: ${roomId}`);
@@ -64,15 +100,16 @@ export default function FilReceiver() {
             fileType: metadata.fileType,
           });
 
+          setClientId(metadata.fromClientId);
           // Send transfer-ready message
-          ws.send(
-            JSON.stringify({
-              type: "transfer-ready",
-              roomId: roomId,
-              fromClientId: clientId,
-              toClientId: metadata.fromClientId,
-            })
-          );
+          // ws.send(
+          //   JSON.stringify({
+          //     type: "transfer-ready",
+          //     roomId: roomId,
+          //     fromClientId: userId,
+          //     toClientId: metadata.fromClientId,
+          //   })
+          // );
         },
         onTransferProgress: (progress) => {
           setUploadProgress(progress);
@@ -83,6 +120,48 @@ export default function FilReceiver() {
         onTransferError: (error) => {
           toast.error(`Transfer error: ${error}`);
           setConnectionState("failed");
+        },
+        onClientLeft: (clientId) => {
+          if (ws) {
+            ws.send(
+              JSON.stringify({
+                type: "client-left",
+                roomId: roomId,
+                clientId: userId,
+              })
+            );
+          }
+          if (clientId === userId) {
+            toast.info("Sender disconnected");
+            setClientId("");
+            setConnectionState("disconnected");
+            setFileMetaData(null);
+          }
+        },
+        onOffer: async (message) => {
+          console.log("Received offer:", message);
+
+          console.log("Creating peer connection with offer:", message.sdp);
+          const pc = await createPeerConnectionReceiver(
+            ws,
+            message.roomId,
+            userId,
+            message.fromClientId,
+            message.sdp
+          );
+
+          setPeerConnection(pc);
+        },
+        onIceCandidate: async (message) => {
+          if (peerConnection && message.candidate) {
+            try {
+              await peerConnection.addIceCandidate(
+                new RTCIceCandidate(message.candidate)
+              );
+            } catch (error) {
+              toast.error("Error receiving the file from sender");
+            }
+          }
         },
       });
     } catch (error) {
@@ -142,12 +221,23 @@ export default function FilReceiver() {
       ) : (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <Badge fontVariant="default">Connected to Room: {roomId}</Badge>
+            <div className="flex flex-row gap-2 ml-1 items-center">
+              {" "}
+              <p className="w-2 h-2 bg-green-500 rounded-full"></p>Connected to{" "}
+              {roomId}
+            </div>
             <Button
               variant="outline"
               size="sm"
               onClick={() => {
                 if (wsConnection) {
+                  wsConnection.send(
+                    JSON.stringify({
+                      type: "client-left",
+                      roomId: roomId,
+                      clientId: userId,
+                    })
+                  );
                   wsConnection.close();
                   setWebSocketConnection(null);
                 }

@@ -1,6 +1,15 @@
 "use client";
 
-import { Upload, X, Send, Copy, Badge, Loader2 } from "lucide-react";
+import {
+  Upload,
+  X,
+  Send,
+  Copy,
+  Badge,
+  Loader2,
+  Loader,
+  User,
+} from "lucide-react";
 import { Card, CardContent } from "../ui/card";
 import { cn } from "@/lib/utils";
 import { useEffect, useRef, useState } from "react";
@@ -16,10 +25,12 @@ import {
 } from "../services/WebSocketMessages";
 import { v4 as uuidV4 } from "uuid";
 import { formatFileSize } from "../services/fileFormat";
+import { createPeerConnectionSender } from "../services/peerConnection";
 
 export default function FileUploader() {
   const [isDragging, setIsDragging] = useState(false);
   const [isCreatingTransfer, setIsCreatingTransfer] = useState(false);
+  const [receiverConnected, setReceiverConnected] = useState(false);
 
   const {
     file,
@@ -41,7 +52,12 @@ export default function FileUploader() {
     connectedClients,
     addConnectedClient,
     userId,
-    setUserId
+    setUserId,
+    clientId,
+    setClientId,
+    removeConnectedClient,
+    peerConnection,
+    setPeerConnection,
   } = useTransferStore();
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -49,9 +65,34 @@ export default function FileUploader() {
   const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2GB limit
 
   useEffect(() => {
-    const clientId = uuidV4();
-    setUserId(clientId);
-  }, [])
+    const userId = uuidV4();
+    setUserId(userId);
+  }, []);
+
+  useEffect(() => {
+    if (peerConnection) {
+      peerConnection.onconnectionstatechange = () => {
+        toast.info("Connection state changed");
+        console.log(
+          "Connection state changed: ",
+          peerConnection.connectionState
+        );
+      };
+
+      if (peerConnection.connectionState === "connected") {
+        toast.success("Peer-to-peer connection established");
+      } else if (
+        peerConnection.connectionState === "disconnected" ||
+        peerConnection.connectionState === "failed"
+      ) {
+        toast.error("Peer connection lost");
+      }
+
+      peerConnection.oniceconnectionstatechange = () => {
+        console.log("ICE connection state:", peerConnection.iceConnectionState);
+      };
+    }
+  }, [peerConnection]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -88,32 +129,18 @@ export default function FileUploader() {
     setFile(newFile);
     setUploadProgress(0);
     setIsSending(false);
-    setShowConfirmButtons(false);
-    simulateUpload();
-  };
-
-  const simulateUpload = () => {
-    let progress = 0;
-    const interval = setInterval(() => {
-      progress += 30; // Fixed increment for smooth progress
-      if (progress >= 100) {
-        progress = 100;
-        clearInterval(interval);
-        setShowConfirmButtons(true); // Show send/cancel buttons
-        toast.success("File ready to send");
-      }
-      setUploadProgress(progress);
-    }, 300); // Completes in ~3 seconds
+    setShowConfirmButtons(true);
   };
 
   const handleSend = async () => {
     setShowConfirmButtons(false);
     if (!file) {
-      toast.error("Please select a file filrst");
+      toast.error("Please select a file first");
       return;
     }
     setIsCreatingTransfer(true);
     setConnectionState("connecting");
+    setReceiverConnected(false);
 
     try {
       const response = await createTransferEntry(
@@ -122,7 +149,7 @@ export default function FileUploader() {
       );
       if (!response?.status || !response?.data) {
         toast.error(
-          `Error in initiating transfer: ${response?.error || "Unknows error"}`
+          `Error in initiating transfer: ${response?.error || "Unknown error"}`
         );
         setConnectionState("failed");
         setIsCreatingTransfer(false);
@@ -131,9 +158,10 @@ export default function FileUploader() {
 
       setTransferId(response.data.transferId);
       setRoomId(response.data.roomId);
+      const currentRoomId = response.data.roomId;
 
-      const clientId = userId;
-      const ws = await connectToRoom(response.data.roomId, clientId);
+      // const clientId = userId;
+      const ws = await connectToRoom(response.data.roomId, userId);
 
       if (!ws) {
         toast.error(`Failed to connect to the room: ${response.data.roomId}`);
@@ -145,8 +173,32 @@ export default function FileUploader() {
       setUpWebSocketEventHandler(ws, true, {
         onClientJoined: (clientId) => {
           toast.success(`Receiver connected: ${clientId}`);
+          setClientId(clientId);
           addConnectedClient(clientId);
+          setReceiverConnected(true);
 
+          const pc = createPeerConnectionSender(
+            ws,
+            currentRoomId,
+            userId,
+            clientId,
+            (offer: string) => {
+              ws.send(
+                JSON.stringify({
+                  type: "offer",
+                  roomId: response.data?.roomId,
+                  sdp: offer,
+                  fromClientId: userId,
+                  toClientId: clientId,
+                })
+              );
+            }
+          );
+
+          // Store references
+          setPeerConnection(pc);
+
+          // Send file metadata for UI purposes (not for the actual transfer)
           if (file) {
             ws.send(
               JSON.stringify({
@@ -155,10 +207,28 @@ export default function FileUploader() {
                 fileName: file.name,
                 fileSize: file.size,
                 fileType: file.type,
-                fromClientId: clientId,
+                fromClientId: userId,
               })
             );
           }
+
+          // Set up handlers for the data channel
+
+          // Set up a handler for when the connection state changes
+          pc.onconnectionstatechange = () => {
+            console.log(`Connection state changed to: ${pc.connectionState}`);
+
+            if (pc.connectionState === "connected") {
+              toast.success("Peer connection established");
+              // Connection handling is done in dataChannel.onopen
+            } else if (
+              pc.connectionState === "disconnected" ||
+              pc.connectionState === "failed"
+            ) {
+              toast.error(`Connection ${pc.connectionState}`);
+              setReceiverConnected(false);
+            }
+          };
         },
 
         onTransferProgress: (progress: number) => {
@@ -169,15 +239,48 @@ export default function FileUploader() {
           toast.success(`File Transfer completed`);
           setIsSending(false);
           setConnectionState("disconnected");
+          setReceiverConnected(false);
         },
 
         onTransferError: (error) => {
           toast.error(`Transfer error: ${error}`);
           setConnectionState("failed");
+          setReceiverConnected(false);
         },
         onRoomJoined: (clients) => {
           toast.success(`Connected to the room: ${response.data?.roomId}`);
           setConnectionState("connected");
+        },
+        onClientLeft: (clientId) => {
+          toast.info(`Receiver disconnected: ${clientId}`);
+          removeConnectedClient(clientId);
+          setReceiverConnected(false);
+          setClientId("");
+        },
+        onAnswer: async (message: any) => {
+          if (peerConnection && message.sdp) {
+            console.log("Setting remote description with answer:", message.sdp);
+            try {
+              await peerConnection.setRemoteDescription(
+                new RTCSessionDescription(message.sdp)
+              );
+              console.log("Remote description set successfully");
+            } catch (error) {
+              console.error("Error setting remote description:", error);
+              toast.error("Failed to establish connection with receiver");
+            }
+          }
+        },
+        onIceCandidate: async (message) => {
+          if (peerConnection && message.candidate) {
+            try {
+              await peerConnection.addIceCandidate(
+                new RTCIceCandidate(message.candidate)
+              );
+            } catch (error) {
+              toast.error("Error connecting to the receiver");
+            }
+          }
         },
       });
 
@@ -191,6 +294,7 @@ export default function FileUploader() {
       console.error("Error in handleSend:", error);
       toast.error(`Error: ${error}`);
       setConnectionState("failed");
+      setReceiverConnected(false);
     } finally {
       setIsCreatingTransfer(false);
     }
@@ -200,6 +304,8 @@ export default function FileUploader() {
     setUploadProgress(0);
     setShowConfirmButtons(false);
     setFile(null);
+    setReceiverConnected(false);
+    setConnectionState("disconnected");
   };
 
   const handleRoomIdCopy = () => {
@@ -216,6 +322,96 @@ export default function FileUploader() {
       }
     };
   }, [wsConnection]);
+
+  // Add a function to handle sending the file
+  const sendFile = async (file: File, dataChannel: RTCDataChannel) => {
+    // Check if the data channel is open
+    if (dataChannel.readyState !== "open") {
+      console.error("Data channel is not open!");
+      toast.error("Connection is not ready for file transfer");
+      return;
+    }
+
+    const CHUNK_SIZE = 16384; // 16 KB chunks
+    const fileReader = new FileReader();
+    let offset = 0;
+    let chunkCount = 0;
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+
+    console.log(
+      `Starting file transfer: ${file.name}, size: ${file.size}, chunks: ${totalChunks}`
+    );
+
+    // First, send file metadata
+    try {
+      const fileMetadata = {
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        totalChunks: totalChunks,
+      };
+      dataChannel.send(
+        JSON.stringify({ type: "metadata", data: fileMetadata })
+      );
+      console.log("Sent file metadata", fileMetadata);
+    } catch (error) {
+      console.error("Error sending metadata:", error);
+      toast.error("Error initiating file transfer");
+      return;
+    }
+
+    fileReader.onload = (e) => {
+      try {
+        if (e.target?.result && dataChannel.readyState === "open") {
+          // Need to send ArrayBuffer, not string
+          const arrayBuffer = e.target.result as ArrayBuffer;
+          dataChannel.send(arrayBuffer);
+          chunkCount++;
+          offset += arrayBuffer.byteLength;
+
+          // Update progress
+          const progress = Math.min(
+            100,
+            Math.floor((offset / file.size) * 100)
+          );
+          setUploadProgress(progress);
+          console.log(
+            `Sent chunk ${chunkCount}/${totalChunks}, progress: ${progress}%`
+          );
+
+          if (offset < file.size) {
+            // Small delay to prevent overwhelming the data channel
+            setTimeout(() => readSlice(offset), 0);
+          } else {
+            // File transfer completed
+            console.log("All chunks sent, sending completion message");
+            dataChannel.send(JSON.stringify({ type: "complete" }));
+            toast.success("File transfer completed!");
+          }
+        }
+      } catch (error) {
+        console.error("Error sending chunk:", error);
+        toast.error("Error during file transfer");
+      }
+    };
+
+    fileReader.onerror = (error) => {
+      console.error("FileReader error:", error);
+      toast.error("Error reading file");
+    };
+
+    const readSlice = (o: number) => {
+      try {
+        const slice = file.slice(o, o + CHUNK_SIZE);
+        fileReader.readAsArrayBuffer(slice);
+      } catch (error) {
+        console.error("Error reading slice:", error);
+        toast.error("Error processing file");
+      }
+    };
+
+    readSlice(0);
+  };
 
   return (
     <Card>
@@ -266,7 +462,9 @@ export default function FileUploader() {
             <div className="mt-4">
               <h4 className="text-sm font-medium">
                 {isSending
-                  ? connectionState === 'connected' ? `Receiver connected` : `Waiting for the user to connect...`
+                  ? receiverConnected
+                    ? `${clientId} Connected`
+                    : "Waiting for the user to connect..."
                   : "File ready to send"}
               </h4>
               <div className="flex items-center justify-between mt-2">
@@ -286,36 +484,8 @@ export default function FileUploader() {
                 </Button>
               </div>
 
-              {!isSending ? (
-                <div className="flex items-center gap-2 mt-2">
-                  <Progress value={uploadProgress} className="h-2" />
-                  <span className="text-xs text-muted-foreground w-10">
-                    {uploadProgress}%
-                  </span>
-                </div>
-              ) : (
+              {isSending && (
                 <div className="mt-4 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <Badge
-                      fontVariant={
-                        connectionState === "connected"
-                          ? "default"
-                          : connectionState === "connecting"
-                          ? "outline"
-                          : connectionState === "failed"
-                          ? "destructive"
-                          : "secondary"
-                      }
-                    >
-                      {connectionState}
-                    </Badge>
-
-                    {connectedClients.length > 0 && (
-                      <Badge fontVariant="outline">
-                        {connectedClients.length} user(s) connected
-                      </Badge>
-                    )}
-                  </div>
                   {roomId && (
                     <div className="flex items-center justify-between p-2 bg-muted rounded-md">
                       <code className="text-sm">{roomId}</code>

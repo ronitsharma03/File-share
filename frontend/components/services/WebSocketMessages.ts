@@ -1,8 +1,21 @@
-import { useTransferStore } from "../atoms/fileTransferAtoms";
+interface OfferAnswerMessage {
+  roomId: string;
+  sdp: string;
+  fromClientId: string;
+  toClientId: string;
+}
+
+interface IceCandidateMessage {
+  roomId: string;
+  candidate: RTCIceCandidateInit;
+  fromClientId: string;
+  toClientId: string;
+}
 
 export const connectToRoom = async (
   roomId: string,
-  clientId?: string
+  clientId?: string,
+  userName?: string
 ): Promise<WebSocket | null> => {
   try {
     const WS_URL = process.env.NEXT_PUBLIC_WS_URL;
@@ -26,6 +39,7 @@ export const connectToRoom = async (
               type: "room-join",
               roomId: roomId,
               clientId: clientId,
+              userName: userName || "Anonynous user"
             })
           );
         }
@@ -54,6 +68,10 @@ export const setUpWebSocketEventHandler = (
     onTransferComplete?: () => void;
     onTransferError?: (error: string) => void;
     onRoomJoined?: (clients: string[]) => void;
+    onClientLeft?: (clientId: string) => void;
+    onOffer?: (message: OfferAnswerMessage) => void;
+    onAnswer?: (message: OfferAnswerMessage) => void;
+    onIceCandidate?: (message: IceCandidateMessage) => void;
   }
 ) => {
   ws.onmessage = (event) => {
@@ -84,8 +102,26 @@ export const setUpWebSocketEventHandler = (
           callbacks.onTransferError?.(message.error);
           break;
 
+        case "client-left":
+          if (message.clientId) {
+            callbacks.onClientLeft?.(message.clientId);
+          }
+          break;
+
+        case "offer": 
+          callbacks.onOffer && callbacks.onOffer(message);
+          break;
+
+        case "answer": 
+          callbacks.onAnswer && callbacks.onAnswer(message);
+          break;
+
+        case "ice-candidate": 
+          callbacks.onIceCandidate && callbacks.onIceCandidate(message);
+          break;
+
         default:
-          console.log("MEssage type not supported");
+          console.log("Message type not supported", message.type);
       }
     } catch (error) {
       console.error(`Error parsing websocket message: ${error}`);
@@ -97,20 +133,7 @@ export const setUpWebSocketEventHandler = (
   };
 
 
-  // if(isSender){
-  //   const { file } = useTransferStore.getState();
-  //   if(file && ws.readyState === WebSocket.OPEN){
-  //     setTimeout(() => {
-  //       ws.send(JSON.stringify({
-  //         type: 'file-metadata',
-  //         roomId: useTransferStore.getState().roomId,
-  //         fileName: file.name,
-  //         fileSize: file.size,
-  //         fromClientId: "sender"
-  //       }))
-  //     }, 2000);
-  //   }
-  // }
+  
 
   return ws;
 };

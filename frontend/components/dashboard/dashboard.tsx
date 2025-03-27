@@ -15,9 +15,11 @@ import FileUploader from "../fileUploader/file-uploader";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 import FilReceiver from "../fileReceiver/file-receiver";
+import { useTransferStore } from "../atoms/fileTransferAtoms";
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("send");
+  const { connectionState } = useTransferStore();
 
   return (
     <DashboardShell>
@@ -41,10 +43,16 @@ export default function Dashboard() {
         <TabsContent value="receive" className="space-y-4 lg:mr-56">
           <Card>
             <CardHeader>
-              <CardTitle>Receive the file</CardTitle>
-              <CardDescription>
-                Paste the shared code here to receive your file
-              </CardDescription>
+              {connectionState ? (
+                ""
+              ) : (
+                <>
+                  <CardTitle>Receive the file</CardTitle>
+                  <CardDescription>
+                    Paste the shared code here to receive your file
+                  </CardDescription>
+                </>
+              )}
             </CardHeader>
             <CardContent>
               <FilReceiver />

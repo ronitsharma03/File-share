@@ -25,6 +25,7 @@ export const handleMessages = async (
         break;
 
       case "client-left":
+        handleClientLeft(ws, message);
         break;
 
       case "offer":
@@ -72,13 +73,30 @@ export const handleMessages = async (
   }
 };
 
+const handleClientLeft = (ws: WebSocket, message: WebSocketMessage & { type: "client-left" }): void => {
+  const { roomId, clientId } = message;
+  
+  // Remove client from room
+  roomManager.removeClientFromRoom(ws);
+  
+  // Notify other clients in the room
+  const otherClients = roomManager.getOtherClientsInRoom(roomId, ws);
+  otherClients.forEach((client) => {
+    client.ws.send(JSON.stringify({
+      type: "client-left",
+      roomId,
+      clientId
+    }));
+  });
+};
+
 const handleRoomJoin = (
   ws: WebSocket,
   message: WebSocketMessage & { type: "room-join" }
 ): void => {
   const { roomId, clientId } = message;
 
-  const assignedClientId = roomManager.addClientToRoom(ws, roomId);
+  const assignedClientId = roomManager.addClientToRoom(ws, roomId, clientId);
 
   ws.send(
     JSON.stringify({

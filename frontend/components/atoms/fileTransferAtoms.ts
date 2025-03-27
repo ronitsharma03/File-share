@@ -49,6 +49,11 @@ interface TransferStore {
     userId: string;
     setUserId: (id: string) => void;
 
+    clientId: string;
+    setClientId: (id: string) => void;
+
+    peerConnection: RTCPeerConnection | null;
+    setPeerConnection: (peer: RTCPeerConnection) => void;
 
 }
 
@@ -97,5 +102,10 @@ export const useTransferStore = create<TransferStore>((set) => ({
     userId: '',
     setUserId: (id: string) => set({userId: id}),
 
+    clientId: '',
+    setClientId: (id: string) => set({clientId: id}),
+
+    peerConnection: null,
+    setPeerConnection: (peer: RTCPeerConnection) => set({peerConnection: peer}),
 
 }));
