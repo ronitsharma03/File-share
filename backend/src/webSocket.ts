@@ -23,7 +23,7 @@ const setupWebSocketServer = (server: HttpServer): WebSocketServer => {
       try {
         const message = JSON.parse(data.toString());
         handleMessages(ws, message);
-        console.log(`Message: ${message}`);
+        console.log(`Message: ${data.toString()}`);
       } catch (error) {
         console.error(`Error: ${error}`);
       }
@@ -36,18 +36,6 @@ const setupWebSocketServer = (server: HttpServer): WebSocketServer => {
 
       console.log("Client got disconnected");
     });
-
-    if (roomId) {
-      roomManager.addClientToRoom(ws, roomId, clientId);
-
-      ws.send(
-        JSON.stringify({
-          type: "room-join",
-          roomId,
-          clients: roomManager.getClientIdsInRoom(roomId),
-        })
-      );
-    }
     ws.on("error", () => {
       console.error(`Error setting ws server`);
     });

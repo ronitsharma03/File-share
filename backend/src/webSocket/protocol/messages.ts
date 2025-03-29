@@ -60,7 +60,7 @@ export interface AnswerMessage extends BaseMessage {
 
 export interface IceCandidateMessage extends BaseMessage {
   type: "ice-candidate";
-  candidate: RTCIceCandidateInit;
+  candidate: any;
   fromClientId: string;
   toClientId: string;
 }

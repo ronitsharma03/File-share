@@ -187,10 +187,10 @@ const handleIceCandidate = (
     targetClient.ws.send(
       JSON.stringify({
         type: "ice-candidate",
-        roomId,
-        candidate,
-        fromClientId,
-        toClientId,
+        roomId: roomId,
+        candidate: candidate,
+        fromClientId: fromClientId,
+        toClientId: toClientId,
       })
     );
   }
