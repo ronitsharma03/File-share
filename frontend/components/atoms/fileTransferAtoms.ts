@@ -55,6 +55,9 @@ interface TransferStore {
     peerConnection: RTCPeerConnection | null;
     setPeerConnection: (peer: RTCPeerConnection) => void;
 
+    channel: RTCDataChannel | null;
+    setChannel: (dataChannel: RTCDataChannel) => void;
+
 }
 
 export const useTransferStore = create<TransferStore>((set) => ({
@@ -107,5 +110,9 @@ export const useTransferStore = create<TransferStore>((set) => ({
 
     peerConnection: null,
     setPeerConnection: (peer: RTCPeerConnection) => set({peerConnection: peer}),
+
+    channel: null,
+    setChannel: (dataChannel: RTCDataChannel) => set({channel: dataChannel}),
+    
 
 }));

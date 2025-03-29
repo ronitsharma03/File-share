@@ -8,13 +8,30 @@ export const rtcConfig = {
     { urls: "stun:stun3.l.google.com:19302" },
     { urls: "stun:stun4.l.google.com:19302" },
 
-    // Additional public STUN servers
-    { urls: "stun:stun.stunprotocol.org:3478" },
-    { urls: "stun:stun.sipgate.net:3478" },
-    { urls: "stun:stun.schlund.de:3478" },
-    { urls: "stun:stun.voiparound.com:3478" },
+    {
+      urls: "turn:numb.viagenie.ca",
+      username: "webrtc@live.com",
+      credential: "muazkh"
+    },
+    {
+      urls: "turn:openrelay.metered.ca:80",
+      username: "openrelayproject",
+      credential: "openrelayproject"
+    },
+    {
+      urls: "turn:openrelay.metered.ca:443",
+      username: "openrelayproject",
+      credential: "openrelayproject"
+    },
+    {
+      urls: "turn:openrelay.metered.ca:443?transport=tcp",
+      username: "openrelayproject",
+      credential: "openrelayproject"
+    }
   ],
 };
+
+import { useTransferStore } from "../atoms/fileTransferAtoms";
 
 export function createPeerConnectionSender(
   ws: WebSocket,
@@ -24,26 +41,31 @@ export function createPeerConnectionSender(
   onOfferCreated: (offer: any) => void
 ) {
   const pc = new RTCPeerConnection(rtcConfig);
-  const dataChannel = pc.createDataChannel("fileTransfer");
+  const dataChannel = pc.createDataChannel("fileTransfer", {
+    negotiated: false,
+    ordered: true
+  });
 
   dataChannel.onopen = () => {
+    useTransferStore.getState().setChannel(dataChannel);
     console.log("Data channel opened");
   };
 
   dataChannel.onclose = () => {
     console.log("Data channel closed");
 
-    dataChannel.onerror = (error) => {
-      console.log("Data channel error: ", error);
-    };
+  };
+  dataChannel.onerror = (error) => {
+    console.log("Data channel error: ", error);
   };
 
   pc.onicecandidate = (event) => {
     if (event.candidate) {
+      console.log("onicecandidate triggered, candidate:", event.candidate);
       ws.send(
         JSON.stringify({
           type: "ice-candidate",
-          roomId,
+          roomId: roomId,
           candidate: event.candidate,
           fromClientId: senderId,
           toClientId: receiverId,
@@ -69,9 +91,16 @@ export function createPeerConnectionSender(
 
   pc.oniceconnectionstatechange = () => {
     console.log("Ice connection state changed: ", pc.iceConnectionState);
+    console.log("ICE Connection State:", pc.iceConnectionState);
+  if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+    console.log("ICE connection successful!");
+  } else if (pc.iceConnectionState === 'failed') {
+    console.error("ICE connection failed");
+  }
   };
 
-  return pc;
+
+  return { pc, dataChannel };
 }
 
 export async function createPeerConnectionReceiver(
@@ -85,6 +114,7 @@ export async function createPeerConnectionReceiver(
 
   pc.onicecandidate = (event) => {
     if (event.candidate) {
+      console.log("onicecandidate triggered, candidate:", event.candidate);
       ws.send(
         JSON.stringify({
           type: "ice-candidate",

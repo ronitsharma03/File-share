@@ -6,7 +6,7 @@ import {
 } from "../services/WebSocketMessages";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { v4 as uuidV4 } from "uuid";
 import { Badge, Download, Loader2 } from "lucide-react";
 import { Card } from "../ui/card";
@@ -15,6 +15,9 @@ import { Progress } from "../ui/progress";
 import { createPeerConnectionReceiver } from "../services/peerConnection";
 
 export default function FilReceiver() {
+  const [socket, setSocket] = useState<WebSocket | null>(null);
+  const [peer, setPeer] = useState<RTCPeerConnection | null>(null);
+
   const {
     roomId,
     setRoomId,
@@ -45,29 +48,29 @@ export default function FilReceiver() {
   }, []);
 
   useEffect(() => {
-    if (peerConnection) {
-      peerConnection.onconnectionstatechange = () => {
+    if (peer) {
+      peer.onconnectionstatechange = () => {
         toast.info("Connection state changed");
         console.log(
           "Connection state changed: ",
-          peerConnection.connectionState
+          peer.connectionState
         );
       };
 
-      if (peerConnection.connectionState === "connected") {
+      if (peer.connectionState === "connected") {
         toast.success("Peer-to-peer connection established");
       } else if (
-        peerConnection.connectionState === "disconnected" ||
-        peerConnection.connectionState === "failed"
+        peer.connectionState === "disconnected" ||
+        peer.connectionState === "failed"
       ) {
         toast.error("Peer connection lost");
       }
 
-      peerConnection.oniceconnectionstatechange = () => {
-        console.log("ICE connection state:", peerConnection.iceConnectionState);
+      peer.oniceconnectionstatechange = () => {
+        console.log("ICE connection state:", peer.iceConnectionState);
       };
     }
-  }, [peerConnection]);
+  }, [peer]);
 
   const handleConnect = async () => {
     if (!roomId) {
@@ -79,7 +82,7 @@ export default function FilReceiver() {
 
     try {
       const ws = await connectToRoom(roomId, userId);
-
+      setSocket(ws);
       if (!ws) {
         toast.error(`Cannot connect to Room: ${roomId}`);
         setConnectionState("failed");
@@ -122,8 +125,8 @@ export default function FilReceiver() {
           setConnectionState("failed");
         },
         onClientLeft: (clientId) => {
-          if (ws) {
-            ws.send(
+          if (socket) {
+            socket.send(
               JSON.stringify({
                 type: "client-left",
                 roomId: roomId,
@@ -138,6 +141,15 @@ export default function FilReceiver() {
             setFileMetaData(null);
           }
         },
+        onIceCandidate: async (message) => {
+          if (peer && message.candidate) {
+            try {
+              await peer.addIceCandidate(message.candidate);
+            } catch (error) {
+              toast.error("Error receiving the file from sender");
+            }
+          }
+        },
         onOffer: async (message) => {
           console.log("Received offer:", message);
 
@@ -149,21 +161,13 @@ export default function FilReceiver() {
             message.fromClientId,
             message.sdp
           );
-
+          setPeer(pc)
           setPeerConnection(pc);
         },
-        onIceCandidate: async (message) => {
-          if (peerConnection && message.candidate) {
-            try {
-              await peerConnection.addIceCandidate(
-                new RTCIceCandidate(message.candidate)
-              );
-            } catch (error) {
-              toast.error("Error receiving the file from sender");
-            }
-          }
-        },
+       
       });
+
+      
     } catch (error) {
       toast.error(`Error connecting to Room: ${error}`);
       setConnectionState("failed");
@@ -230,15 +234,16 @@ export default function FilReceiver() {
               variant="outline"
               size="sm"
               onClick={() => {
-                if (wsConnection) {
-                  wsConnection.send(
+                if (socket) {
+                  socket.send(
                     JSON.stringify({
                       type: "client-left",
                       roomId: roomId,
                       clientId: userId,
                     })
                   );
-                  wsConnection.close();
+                  socket.close();
+                  setSocket(null);
                   setWebSocketConnection(null);
                 }
                 setConnectionState("disconnected");

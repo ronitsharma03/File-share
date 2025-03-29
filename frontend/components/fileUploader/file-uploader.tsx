@@ -32,6 +32,7 @@ export default function FileUploader() {
   const [isCreatingTransfer, setIsCreatingTransfer] = useState(false);
   const [receiverConnected, setReceiverConnected] = useState(false);
   const [pc, setPc] = useState<RTCPeerConnection | null>(null);
+  const [fileChannel, setFileChannel] = useState<RTCDataChannel | null>(null);
 
   const {
     file,
@@ -59,8 +60,12 @@ export default function FileUploader() {
     removeConnectedClient,
     peerConnection,
     setPeerConnection,
+    channel,
+    setChannel,
   } = useTransferStore();
 
+  const [socket, setSocket] = useState<WebSocket | null>(null);
+  
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2GB limit
@@ -71,29 +76,29 @@ export default function FileUploader() {
   }, []);
 
   useEffect(() => {
-    if (peerConnection) {
-      peerConnection.onconnectionstatechange = () => {
+    if (pc) {
+      pc.onconnectionstatechange = () => {
         toast.info("Connection state changed");
         console.log(
           "Connection state changed: ",
-          peerConnection.connectionState
+          pc.connectionState
         );
       };
 
-      if (peerConnection.connectionState === "connected") {
+      if (pc.connectionState === "connected") {
         toast.success("Peer-to-peer connection established");
       } else if (
-        peerConnection.connectionState === "disconnected" ||
-        peerConnection.connectionState === "failed"
+        pc.connectionState === "disconnected" ||
+        pc.connectionState === "failed"
       ) {
         toast.error("Peer connection lost");
       }
 
-      peerConnection.oniceconnectionstatechange = () => {
-        console.log("ICE connection state:", peerConnection.iceConnectionState);
+      pc.oniceconnectionstatechange = () => {
+        console.log("ICE connection state:", pc.iceConnectionState);
       };
     }
-  }, [peerConnection]);
+  }, [pc]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -163,7 +168,7 @@ export default function FileUploader() {
 
       // const clientId = userId;
       const ws = await connectToRoom(response.data.roomId, userId);
-
+      setSocket(ws);
       if (!ws) {
         toast.error(`Failed to connect to the room: ${response.data.roomId}`);
         setConnectionState("failed");
@@ -178,7 +183,7 @@ export default function FileUploader() {
           addConnectedClient(clientId);
           setReceiverConnected(true);
 
-          const pc = createPeerConnectionSender(
+          const { pc, dataChannel } = createPeerConnectionSender(
             ws,
             currentRoomId,
             userId,
@@ -196,6 +201,9 @@ export default function FileUploader() {
             }
           );
           setPc(pc);
+          
+          setFileChannel(dataChannel);
+          setChannel(dataChannel);
 
           // Store references
           setPeerConnection(pc);
@@ -231,6 +239,7 @@ export default function FileUploader() {
               setReceiverConnected(false);
             }
           };
+          
         },
 
         onTransferProgress: (progress: number) => {
@@ -259,29 +268,30 @@ export default function FileUploader() {
           setReceiverConnected(false);
           setClientId("");
         },
-        onAnswer: async (message: any) => {
-          // if (peerConnection && message.sdp) {
-            console.log("Setting remote description with answer:", message.sdp);
-            try {
-              await pc?.setRemoteDescription(message.sdp);
-              console.log("Remote description set successfully");
-            } catch (error) {
-              console.error("Error setting remote description:", error);
-              toast.error("Failed to establish connection with receiver");
-            }
-          // }
-        },
         onIceCandidate: async (message) => {
           if (pc && message.candidate) {
             try {
-              await pc.addIceCandidate(
-                new RTCIceCandidate(message.candidate)
-              );
+              console.log("Generated ICE candidate:", message.candidate.candidate);
+              await pc.addIceCandidate(message.candidate);
+              console.log("Adding ice candidates");
             } catch (error) {
               toast.error("Error connecting to the receiver");
             }
           }
         },
+        onAnswer: async (message: any) => {
+          // if (peerConnection && message.sdp) {
+            try {
+              console.log("Setting remote description with answer:", message.sdp);
+              await pc?.setRemoteDescription({type: 'answer', sdp: message.sdp});
+              console.log("Remote description set successfully");
+          } catch (error) {
+            console.error("Error setting remote description:", error);
+            toast.error("Failed to establish connection with receiver");
+          }
+          // }
+        },
+        
       });
 
       setWebSocketConnection(ws);
